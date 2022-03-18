@@ -12,7 +12,7 @@ protocol SettingsViewControllerDelegate {
 }
 
 class SettingsViewController: UIViewController {
-        
+    
     // MARK: - IBOutlets
     @IBOutlet weak var colorView: UIView!
     
@@ -31,6 +31,7 @@ class SettingsViewController: UIViewController {
     // MARK: - Properties
     var delegate: SettingsViewControllerDelegate!
     var mainVCBackgroundColor: UIColor!
+    var setValueTF: SetValueTF!
     
     // MARK: - OverrideMethods
     override func viewDidLoad() {
@@ -44,6 +45,51 @@ class SettingsViewController: UIViewController {
         setColor()
         setValue()
         defaultSettings()
+        
+        redTextField.delegate = self
+        greenTextField.delegate = self
+        blueTextField.delegate = self
+        
+        createToolbar(textField: redTextField)
+        createToolbar(textField: greenTextField)
+        createToolbar(textField: blueTextField)
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillShow),
+            name: UIResponder.keyboardWillShowNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillHide),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
+    }
+    
+    // MARK: - KeyboardNotification
+    @objc func keyboardWillShow(notification: NSNotification) {
+        if let keyboardSize = (
+            notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey]
+            as? NSValue)?.cgRectValue
+        {
+            
+            if self.view.frame.origin.y == 0 {
+                self.view.frame.origin.y -= keyboardSize.height
+            }
+        }
+    }
+    
+    @objc func keyboardWillHide(notification: NSNotification) {
+        if self.view.frame.origin.y != 0 {
+            self.view.frame.origin.y = 0
+        }
+    }
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        view.endEditing(true)
     }
     
     // MARK: - IBActions
@@ -63,6 +109,7 @@ class SettingsViewController: UIViewController {
     }
     
     @IBAction func doneButtonPressed(_ sender: UIButton) {
+        view.endEditing(true)
         delegate.setBackgroundColor(for: colorView.backgroundColor ?? .gray)
         dismiss(animated: true)
     }
@@ -106,3 +153,86 @@ class SettingsViewController: UIViewController {
     }
 }
 
+// MARK: - UITextFieldDelegate
+extension SettingsViewController: UITextFieldDelegate {
+    func textFieldDidEndEditing(_ textField: UITextField) {
+        
+        guard let newValue = textField.text else { return }
+        guard let numberValue = Float(newValue) else { return }
+        guard textField.text?.isEmpty == false else {return }
+        
+        if numberValue != Float(numberValue) {
+            showAlert(title: "Wrong format", message: "Please insert correct values")
+        }
+        
+        if numberValue < 0 && numberValue > 1 {
+            showAlert(title: "Wrong format", message: "Please insert correct values")
+        }
+        
+        if textField == redTextField {
+            setValueTF?.redValueTF = numberValue
+        } else if
+            textField == greenTextField {
+            setValueTF?.greenValueTF = numberValue
+        } else if
+            textField == blueTextField {
+            setValueTF?.blueValueTF = numberValue
+        }
+    }
+    // MARK: - ToolBar
+    func createToolbar(textField: UITextField) {
+        let toolBar = UIToolbar()
+        toolBar.sizeToFit()
+        toolBar.barStyle = UIBarStyle.default
+        toolBar.isTranslucent = true
+        let doneButton = UIBarButtonItem(
+            title: "Done",
+            style: .done,
+            target: self,
+            action: #selector(dismissKeyboard)
+        )
+        let cancelButton = UIBarButtonItem(
+            title: "Cancel",
+            style: .plain,
+            target: self,
+            action: #selector(dismissKeyboard)
+        )
+        let spaceButton = UIBarButtonItem(
+            barButtonSystemItem: .flexibleSpace,
+            target: nil,
+            action: nil
+        )
+        toolBar.setItems([cancelButton, spaceButton, doneButton], animated: true)
+        toolBar.isUserInteractionEnabled = true
+        toolBar.tintColor = .blue
+        toolBar.barTintColor = .white
+        
+        textField.inputAccessoryView = toolBar
+        textField.delegate = self
+    }
+    
+    @objc func dismissKeyboard() {
+        view.endEditing(true)
+    }
+}
+
+// MARK: AlertController
+extension SettingsViewController {
+    private func showAlert(
+        title: String,
+        message: String,
+        textField: UITextField? = nil
+    )
+    {
+        let alert = UIAlertController(
+            title: title,
+            message: message,
+            preferredStyle: .alert
+        )
+        let okAction = UIAlertAction(title: "Ok", style: .default) { _ in
+            textField?.text = ""
+        }
+        alert.addAction(okAction)
+        present(alert, animated: true)
+    }
+}
