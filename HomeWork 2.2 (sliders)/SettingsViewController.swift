@@ -7,9 +7,6 @@
 
 import UIKit
 
-protocol SettingsViewControllerDelegate {
-    func setBackgroundColor(for color: UIColor)
-}
 
 class SettingsViewController: UIViewController {
     
@@ -30,8 +27,7 @@ class SettingsViewController: UIViewController {
     
     // MARK: - Properties
     var delegate: SettingsViewControllerDelegate!
-    var mainVCBackgroundColor: UIColor!
-    var setValueTF: SetValueTF!
+    var viewColor: UIColor!
     
     // MARK: - OverrideMethods
     override func viewDidLoad() {
@@ -42,80 +38,39 @@ class SettingsViewController: UIViewController {
         redSlider.minimumTrackTintColor = .red
         greenSlider.minimumTrackTintColor = .green
         
-        setColor()
-        setValue()
-        defaultSettings()
+        colorView.backgroundColor = viewColor
         
-        redTextField.delegate = self
-        greenTextField.delegate = self
-        blueTextField.delegate = self
-        
-        createToolbar(textField: redTextField)
-        createToolbar(textField: greenTextField)
-        createToolbar(textField: blueTextField)
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(keyboardWillShow),
-            name: UIResponder.keyboardWillShowNotification,
-            object: nil
-        )
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(keyboardWillHide),
-            name: UIResponder.keyboardWillHideNotification,
-            object: nil
-        )
+        setSliders()
+        setValue(for: redValueLabel, greenValueLabel, blueValueLabel)
+        setValue(for: redTextField, greenTextField, blueTextField)
     }
     
-    // MARK: - KeyboardNotification
-    @objc func keyboardWillShow(notification: NSNotification) {
-        if let keyboardSize = (
-            notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey]
-            as? NSValue)?.cgRectValue
-        {
-            
-            if self.view.frame.origin.y == 0 {
-                self.view.frame.origin.y -= keyboardSize.height
-            }
-        }
-    }
-    
-    @objc func keyboardWillHide(notification: NSNotification) {
-        if self.view.frame.origin.y != 0 {
-            self.view.frame.origin.y = 0
-        }
-    }
-    
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        view.endEditing(true)
-    }
     
     // MARK: - IBActions
     @IBAction func rgbSlider(_ sender: UISlider) {
-        setColor()
+    
         switch sender {
         case redSlider:
-            redValueLabel.text = string(from: redSlider)
-            redTextField.text = string(from: redSlider)
+            setValue(for: redValueLabel)
+            setValue(for: redTextField)
         case greenSlider:
-            greenValueLabel.text = string(from: greenSlider)
-            greenTextField.text = string(from: greenSlider)
+            setValue(for: greenValueLabel)
+            setValue(for: greenTextField)
         default:
-            blueValueLabel.text = string(from: blueSlider)
-            blueTextField.text = string(from: blueSlider)
+            setValue(for: blueValueLabel)
+            setValue(for: blueTextField)
         }
+        setColor()
     }
     
     @IBAction func doneButtonPressed(_ sender: UIButton) {
-        view.endEditing(true)
-        delegate.setBackgroundColor(for: colorView.backgroundColor ?? .gray)
+        delegate?.setBackgroundColor(for: colorView.backgroundColor ?? .red)
         dismiss(animated: true)
     }
-    
+}
     
     // MARK: - PrivateMethods
+extension SettingsViewController {
     private func setColor() {
         colorView.backgroundColor = UIColor(
             red: CGFloat(redSlider.value),
@@ -125,114 +80,96 @@ class SettingsViewController: UIViewController {
         )
     }
     
-    private func setValue() {
-        let sliderValue = CIColor(color: mainVCBackgroundColor)
-        
-        redSlider.value = Float(sliderValue.red)
-        greenSlider.value = Float(sliderValue.green)
-        blueSlider.value = Float(sliderValue.blue)
-        
-        colorView.backgroundColor = mainVCBackgroundColor
+    private func setValue(for labels: UILabel...) {
+        labels.forEach { label in
+            switch label {
+            case redValueLabel: label.text = string(from: redSlider)
+            case greenValueLabel: label.text = string(from: greenSlider)
+            default: label.text = string(from: blueSlider)
+            }
+        }
     }
     
-    private func defaultSettings() {
-        redValueLabel.text = string(from: redSlider)
-        redTextField.text = string(from: redSlider)
-        
-        greenValueLabel.text = string(from: greenSlider)
-        greenTextField.text = string(from: greenSlider)
-        
-        blueValueLabel.text = string(from: blueSlider)
-        blueTextField.text = string(from: blueSlider)
-        
-        setColor()
+    private func setValue(for textFields: UITextField...) {
+        textFields.forEach { textField in
+            switch textField {
+            case redTextField: textField.text = string(from: redSlider)
+            case greenTextField: textField.text = string(from: greenSlider)
+            default: textField.text = string(from: blueSlider)
+            }
+        }
     }
     
+    private func setSliders() {
+        let ciColor = CIColor(color: viewColor)
+        
+        redSlider.value = Float(ciColor.red)
+        greenSlider.value = Float(ciColor.green)
+        blueSlider.value = Float(ciColor.blue)
+    }
+    // Значение RGB
     private func string(from slider: UISlider) -> String {
         String(format: "%.2f", slider.value)
+    }
+    
+    @objc private func didTapDone() {
+        view.endEditing(true)
+    }
+    
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        let okAction = UIAlertAction(title: "Ok", style: .default)
+        alert.addAction(okAction)
+        present(alert, animated: true)
     }
 }
 
 // MARK: - UITextFieldDelegate
 extension SettingsViewController: UITextFieldDelegate {
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesBegan(touches, with: event)
+        view.endEditing(true)
+    }
     func textFieldDidEndEditing(_ textField: UITextField) {
         
-        guard let newValue = textField.text else { return }
-        guard let numberValue = Float(newValue) else { return }
-        guard textField.text?.isEmpty == false else {return }
+        guard let text = textField.text else { return }
         
-        if numberValue != Float(numberValue) {
-            showAlert(title: "Wrong format", message: "Please insert correct values")
+        if let currentValue = Float(text) {
+            switch textField {
+            case redTextField:
+                redSlider.setValue(currentValue, animated: true)
+                setValue(for: redValueLabel)
+            case greenTextField:
+                greenSlider.setValue(currentValue, animated: true)
+                setValue(for: greenValueLabel)
+            default:
+                blueSlider.setValue(currentValue, animated: true)
+                setValue(for: blueValueLabel)
+            }
+            setColor()
+            return
         }
-        
-        if numberValue < 0 && numberValue > 1 {
-            showAlert(title: "Wrong format", message: "Please insert correct values")
-        }
-        
-        if textField == redTextField {
-            setValueTF?.redValueTF = numberValue
-        } else if
-            textField == greenTextField {
-            setValueTF?.greenValueTF = numberValue
-        } else if
-            textField == blueTextField {
-            setValueTF?.blueValueTF = numberValue
-        }
+        showAlert(title: "Wrong format", message: "Please enter correct value")
     }
-    // MARK: - ToolBar
-    func createToolbar(textField: UITextField) {
-        let toolBar = UIToolbar()
-        toolBar.sizeToFit()
-        toolBar.barStyle = UIBarStyle.default
-        toolBar.isTranslucent = true
+    
+    func textFieldDidBeginEditing(_ textField: UITextField) {
+        let keyboardToolBar = UIToolbar()
+        keyboardToolBar.sizeToFit()
+        textField.inputAccessoryView = keyboardToolBar
+        
         let doneButton = UIBarButtonItem(
-            title: "Done",
-            style: .done,
+            barButtonSystemItem: .done,
             target: self,
-            action: #selector(dismissKeyboard)
+            action: #selector(didTapDone)
         )
-        let cancelButton = UIBarButtonItem(
-            title: "Cancel",
-            style: .plain,
-            target: self,
-            action: #selector(dismissKeyboard)
-        )
-        let spaceButton = UIBarButtonItem(
+        
+        let flexBarButton = UIBarButtonItem(
             barButtonSystemItem: .flexibleSpace,
             target: nil,
             action: nil
         )
-        toolBar.setItems([cancelButton, spaceButton, doneButton], animated: true)
-        toolBar.isUserInteractionEnabled = true
-        toolBar.tintColor = .blue
-        toolBar.barTintColor = .white
         
-        textField.inputAccessoryView = toolBar
-        textField.delegate = self
-    }
-    
-    @objc func dismissKeyboard() {
-        view.endEditing(true)
-    }
-}
-
-// MARK: AlertController
-extension SettingsViewController {
-    private func showAlert(
-        title: String,
-        message: String,
-        textField: UITextField? = nil
-    )
-    {
-        let alert = UIAlertController(
-            title: title,
-            message: message,
-            preferredStyle: .alert
-        )
-        let okAction = UIAlertAction(title: "Ok", style: .default) { _ in
-            textField?.text = ""
-        }
-        alert.addAction(okAction)
-        present(alert, animated: true)
+        keyboardToolBar.items = [flexBarButton, doneButton]
     }
 }
